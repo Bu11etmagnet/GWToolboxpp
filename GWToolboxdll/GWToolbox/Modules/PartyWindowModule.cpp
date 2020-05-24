@@ -21,8 +21,6 @@
 #include <ImGuiAddons.h>
 
 #include "logger.h"
-#include <chrono>
-#include <thread>
 namespace {
 	static bool IsPvE() {
 		GW::AreaInfo* map = GW::Map::GetCurrentMapInfo();
@@ -36,8 +34,9 @@ namespace {
 		case GW::RegionType::RegionType_HeroesAscent:
 		case GW::RegionType::RegionType_HeroBattleArea:
 			return false;
+        default:
+            return true;
 		}
-		return true;
 	}
 	struct PartyInfo : GW::PartyInfo {
 		size_t GetPartySize() {
@@ -73,48 +72,64 @@ namespace {
 		case GW::RegionType_HeroesAscent:
 		case GW::RegionType_ZaishenBattle:
 			return true;
+        default:
+            return false;
 		}
-		return false;
 	}
 }
 
 void PartyWindowModule::Update(float delta) {
-
+    UNREFERENCED_PARAMETER(delta);
 }
 void PartyWindowModule::Initialize() {
 	ToolboxModule::Initialize();
 	// Remove certain NPCs from party window when dead
-	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentState>(&AgentState_Entry, [&](GW::HookStatus* status, GW::Packet::StoC::AgentState* pak) -> void {
-		if (!add_npcs_to_party_window || pak->state != 16)
-			return; // Not dead.
-		if (std::find(allies_added_to_party.begin(), allies_added_to_party.end(), pak->agent_id) == allies_added_to_party.end())
-			return; // Not added via toolbox
-		RemoveAllyActual(pak->agent_id);
+	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentState>(
+        &AgentState_Entry,
+        [&](GW::HookStatus* status, GW::Packet::StoC::AgentState* pak) -> void {
+            UNREFERENCED_PARAMETER(status);
+		    if (!add_npcs_to_party_window || pak->state != 16)
+			    return; // Not dead.
+		    if (std::find(allies_added_to_party.begin(), allies_added_to_party.end(), pak->agent_id) == allies_added_to_party.end())
+			    return; // Not added via toolbox
+		    RemoveAllyActual(pak->agent_id);
 		});
 	// Remove certain NPCs from party window when despawned
-	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentRemove>(&AgentRemove_Entry, [&](GW::HookStatus* status, GW::Packet::StoC::AgentRemove* pak) -> void {
-		if (std::find(allies_added_to_party.begin(), allies_added_to_party.end(), pak->agent_id) == allies_added_to_party.end())
-			return; // Not added via toolbox
-		RemoveAllyActual(pak->agent_id);
+	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::AgentRemove>(
+        &AgentRemove_Entry,
+        [&](GW::HookStatus* status, GW::Packet::StoC::AgentRemove* pak) -> void {
+            UNREFERENCED_PARAMETER(status);
+		    if (std::find(allies_added_to_party.begin(), allies_added_to_party.end(), pak->agent_id) == allies_added_to_party.end())
+			    return; // Not added via toolbox
+		    RemoveAllyActual(pak->agent_id);
 		});
 	// Add certain NPCs to party window when spawned
-	GW::StoC::RegisterPostPacketCallback<GW::Packet::StoC::AgentAdd>(&AgentAdd_Entry, [&](GW::HookStatus* status, GW::Packet::StoC::AgentAdd* pak) -> void {
-		if (!add_npcs_to_party_window)
-			return;
-		if (!ShouldAddAgentToPartyWindow(pak->agent_type))
-			return;
-		AddAllyActual({ pak->agent_id, pak->allegiance_bits, pak->agent_type ^ 0x20000000 });
+	GW::StoC::RegisterPostPacketCallback<GW::Packet::StoC::AgentAdd>(
+        &AgentAdd_Entry,
+        [&](GW::HookStatus* status, GW::Packet::StoC::AgentAdd* pak) -> void {
+            UNREFERENCED_PARAMETER(status);
+		    if (!add_npcs_to_party_window)
+			    return;
+		    if (!ShouldAddAgentToPartyWindow(pak->agent_type))
+			    return;
+		    AddAllyActual({ pak->agent_id, pak->allegiance_bits, pak->agent_type ^ 0x20000000 });
 		});
 	// Flash/focus window on zoning (and a bit of housekeeping)
-	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::InstanceLoadInfo>(&GameSrvTransfer_Entry, [&](GW::HookStatus* status, GW::Packet::StoC::InstanceLoadInfo* pak) -> void {
-		allies_added_to_party.clear();
-		is_explorable = pak->is_explorable;
+	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::InstanceLoadInfo>(
+        &GameSrvTransfer_Entry,
+        [&](GW::HookStatus* status, GW::Packet::StoC::InstanceLoadInfo* pak) -> void {
+            UNREFERENCED_PARAMETER(status);
+		    allies_added_to_party.clear();
+		    is_explorable = pak->is_explorable != 0;
 		});
 	// Player numbers in party window
-	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::PlayerJoinInstance>(&GameSrvTransfer_Entry, [&](GW::HookStatus* status, GW::Packet::StoC::PlayerJoinInstance* pak) -> void {
-		if (!add_player_numbers_to_party_window || !is_explorable || ::IsPvP())
-			return;
-		SetPlayerNumber(pak->player_name, pak->player_number);
+	GW::StoC::RegisterPacketCallback<GW::Packet::StoC::PlayerJoinInstance>(
+        &GameSrvTransfer_Entry,
+        [&](GW::HookStatus* status, GW::Packet::StoC::PlayerJoinInstance* pak) -> void {
+            UNREFERENCED_PARAMETER(status);
+		    if (!add_player_numbers_to_party_window || !is_explorable || ::IsPvP())
+			    return;
+		    SetPlayerNumber(pak->player_name, pak->player_number);
 		});
 }
 void PartyWindowModule::CheckMap() {
@@ -272,7 +287,7 @@ bool PartyWindowModule::ShouldAddAgentToPartyWindow(GW::Agent* _a) {
 		return false;
 	//if (a->type_map & 0x20000)
 	//	return false; // Already in party window
-	uint32_t agent_type = (0x20000000 | a->player_number);
+	uint32_t agent_type = (0x20000000u | a->player_number);
 	if (a->GetIsDead() || a->GetIsDeadByTypeMap())
 		return false; // Dont add dead NPCs.
 	for (size_t i = 0; i < allies_added_to_party.size(); i++) {
@@ -307,7 +322,7 @@ void PartyWindowModule::DrawSettingInternal() {
 			continue;
 		if (!npc->model_id)
 			continue;
-		ImGui::PushID(npc->model_id);
+		ImGui::PushID(static_cast<int>(npc->model_id));
 		ImGui::Text("%s",npc->alias.c_str());
 		ImGui::SameLine(cols[0]);
 		ImGui::Text("%d", npc->model_id);
@@ -339,7 +354,7 @@ void PartyWindowModule::DrawSettingInternal() {
 		std::string alias_str(new_npc_alias);
 		if (alias_str.empty())
 			return Error("Empty value for Name");
-		std::map<uint32_t, SpecialNPCToAdd*>::iterator it = user_defined_npcs_by_model_id.find(new_npc_model_id);
+		std::map<uint32_t, SpecialNPCToAdd*>::iterator it = user_defined_npcs_by_model_id.find(static_cast<uint32_t>(new_npc_model_id));
 		if (it != user_defined_npcs_by_model_id.end())
 			return Error("Special NPC %s is already defined for model_id %d", it->second->alias.c_str(), new_npc_model_id);
 		AddSpecialNPC({ alias_str.c_str(),(uint32_t)new_npc_model_id,static_cast<GW::Constants::MapID>(new_npc_map_id) });
@@ -355,7 +370,7 @@ void PartyWindowModule::Error(const char* format, ...) {
 	va_end(args);
 	GW::GameThread::Enqueue([buffer]() {
 		Log::Error(buffer);
-		});
+    });
 }
 void PartyWindowModule::SaveSettings(CSimpleIni* ini) {
 	ToolboxModule::SaveSettings(ini);

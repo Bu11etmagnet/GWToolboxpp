@@ -79,7 +79,7 @@ private:
 	void Send(const TeamHeroBuild& tbuild, size_t idx);
 	void Send(const TeamHeroBuild& tbuild);
 	void View(const TeamHeroBuild& tbuild, unsigned int idx);
-	void HeroBuildsWindow::HeroBuildName(const TeamHeroBuild& tbuild, unsigned int idx, std::string* out);
+	void HeroBuildName(const TeamHeroBuild& tbuild, unsigned int idx, std::string* out);
 	bool builds_changed = false;
 	std::vector<TeamHeroBuild> teambuilds;
 
